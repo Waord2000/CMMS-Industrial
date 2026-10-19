@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Barlow Condensed", sans-serif;
+  --font-sans: "IBM Plex Sans", sans-serif;
+
+  --color-graphite-900: #14171b;
+  --color-graphite-800: #1c2025;
+  --color-graphite-700: #262b31;
+  --color-steel-600: #3a414a;
+  --color-steel-400: #6b7480;
+  --color-paper: #eef1f3;
+  --color-amber: #e8a33d;
+  --color-amber-dim: #b97f2c;
+}
+
+body {
+  margin: 0;
+}

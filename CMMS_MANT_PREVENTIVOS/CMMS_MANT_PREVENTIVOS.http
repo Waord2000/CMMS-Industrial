@@ -1,0 +1,6 @@
+@CMMS_MANT_PREVENTIVOS_HostAddress = http://localhost:5013
+
+GET {{CMMS_MANT_PREVENTIVOS_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
