@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Pencil, Trash2, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getCategoriasRepuesto } from "../services/categoriasRepuestoService";
 import {
@@ -36,7 +36,35 @@ export default function Repuestos() {
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState("");
 
+  const [colapsadas, setColapsadas] = useState(new Set());
+
   useEffect(() => { cargarTodo(); }, []);
+
+  // Agrupa los repuestos por categoría. Las categorías van en orden alfabético
+  // y dentro de cada una se conserva el orden en que vienen (el de creación).
+  const grupos = useMemo(() => {
+    const mapa = new Map();
+    for (const r of repuestos) {
+      const clave = r.categoriaId ?? "sin-categoria";
+      if (!mapa.has(clave)) {
+        mapa.set(clave, { clave, nombre: r.nombreCategoria || "Sin categoría", items: [] });
+      }
+      mapa.get(clave).items.push(r);
+    }
+    return [...mapa.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  }, [repuestos]);
+
+  function alternarCategoria(clave) {
+    setColapsadas((prev) => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(clave)) nuevo.delete(clave);
+      else nuevo.add(clave);
+      return nuevo;
+    });
+  }
+
+  function expandirTodo() { setColapsadas(new Set()); }
+  function contraerTodo() { setColapsadas(new Set(grupos.map((g) => g.clave))); }
 
   async function cargarTodo() {
     setCargando(true);
@@ -124,57 +152,91 @@ export default function Repuestos() {
       {cargando && <p className="text-steel-400">Cargando...</p>}
       {error && <p className="text-red-400">{error}</p>}
 
+      {!cargando && !error && grupos.length > 1 && (
+        <div className="mb-3 flex gap-2 text-xs">
+          <button type="button" onClick={expandirTodo} className={btnSecondary}>Expandir todo</button>
+          <button type="button" onClick={contraerTodo} className={btnSecondary}>Contraer todo</button>
+        </div>
+      )}
+
       {!cargando && !error && (
-        <div className="overflow-hidden rounded-lg border border-steel-600 bg-graphite-800 shadow-sm shadow-black/30">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-steel-600 text-left">
-                <th className="p-3 font-medium text-steel-400">Código</th>
-                <th className="p-3 font-medium text-steel-400">Nombre</th>
-                <th className="p-3 font-medium text-steel-400">Categoría</th>
-                <th className="p-3 font-medium text-steel-400">Stock</th>
-                <th className="p-3 font-medium text-steel-400">Costo unitario</th>
-                {puedeModificar && <th className="p-3 font-medium text-steel-400">Acciones</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {repuestos.map((r) => {
-                const stockBajo = r.stockActual <= r.stockMinimo;
-                const unidad = abreviar(r.unidadMedida);
-                return (
-                  <tr key={r.repuestoId} className="border-b border-graphite-700 last:border-0 hover:bg-graphite-700/40">
-                    <td className="p-3 font-mono text-xs text-steel-400">{r.codigo}</td>
-                    <td className="p-3">{r.nombre}</td>
-                    <td className="p-3">{r.nombreCategoria}</td>
-                    <td className="p-3">
-                      <span className={`flex items-center gap-1.5 ${stockBajo ? "text-red-300" : ""}`}>
-                        {stockBajo && <AlertTriangle size={13} />}
-                        {r.stockActual} {unidad} (mín. {r.stockMinimo} {unidad})
-                      </span>
-                    </td>
-                    <td className="p-3">Q {Number(r.costoUnitario).toFixed(2)} / {unidad}</td>
-                    {puedeModificar && (
-                      <td className="space-x-2 p-3">
-                        <button onClick={() => abrirEditar(r)} className={btnSecondary}>
-                          <Pencil size={13} />
-                          Editar
-                        </button>
-                        {esAdmin && (
-                          <button onClick={() => handleEliminar(r.repuestoId)} className={btnDanger}>
-                            <Trash2 size={13} />
-                            Eliminar
-                          </button>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-              {repuestos.length === 0 && (
-                <tr><td colSpan={6} className="p-6 text-center text-steel-400">No hay repuestos registrados.</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="space-y-4">
+          {grupos.map((g) => {
+            const abierta = !colapsadas.has(g.clave);
+            const bajos = g.items.filter((r) => r.stockActual <= r.stockMinimo).length;
+            return (
+              <section key={g.clave} className="overflow-hidden rounded-lg border border-steel-600 bg-graphite-800 shadow-sm shadow-black/30">
+                <button
+                  type="button"
+                  onClick={() => alternarCategoria(g.clave)}
+                  aria-expanded={abierta}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-graphite-700/40"
+                >
+                  <span className="flex items-center gap-2">
+                    {abierta ? <ChevronDown size={16} className="text-amber" /> : <ChevronRight size={16} className="text-amber" />}
+                    <span className="font-display text-base font-semibold">{g.nombre}</span>
+                    <span className="rounded-full bg-graphite-900 px-2 py-0.5 text-xs text-steel-400">{g.items.length}</span>
+                  </span>
+                  {bajos > 0 && (
+                    <span className="flex items-center gap-1.5 text-xs text-red-300">
+                      <AlertTriangle size={13} />
+                      {bajos} con stock bajo
+                    </span>
+                  )}
+                </button>
+
+                {abierta && (
+                  <table className="w-full table-fixed border-collapse border-t border-steel-600 text-sm">
+                    <thead>
+                      <tr className="border-b border-steel-600 text-left">
+                        <th className="w-28 p-3 font-medium text-steel-400">Código</th>
+                        <th className="p-3 font-medium text-steel-400">Nombre</th>
+                        <th className="w-64 p-3 font-medium text-steel-400">Stock</th>
+                        <th className="w-40 p-3 font-medium text-steel-400">Costo unitario</th>
+                        {puedeModificar && <th className="w-52 p-3 font-medium text-steel-400">Acciones</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {g.items.map((r) => {
+                        const stockBajo = r.stockActual <= r.stockMinimo;
+                        const unidad = abreviar(r.unidadMedida);
+                        return (
+                          <tr key={r.repuestoId} className="border-b border-graphite-700 last:border-0 hover:bg-graphite-700/40">
+                            <td className="p-3 font-mono text-xs text-steel-400">{r.codigo}</td>
+                            <td className="p-3">{r.nombre}</td>
+                            <td className="p-3">
+                              <span className={`flex items-center gap-1.5 ${stockBajo ? "text-red-300" : ""}`}>
+                                {stockBajo && <AlertTriangle size={13} />}
+                                {r.stockActual} {unidad} (mín. {r.stockMinimo} {unidad})
+                              </span>
+                            </td>
+                            <td className="p-3">Q {Number(r.costoUnitario).toFixed(2)} / {unidad}</td>
+                            {puedeModificar && (
+                              <td className="space-x-2 p-3">
+                                <button onClick={() => abrirEditar(r)} className={btnSecondary}>
+                                  <Pencil size={13} />
+                                  Editar
+                                </button>
+                                {esAdmin && (
+                                  <button onClick={() => handleEliminar(r.repuestoId)} className={btnDanger}>
+                                    <Trash2 size={13} />
+                                    Eliminar
+                                  </button>
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </section>
+            );
+          })}
+          {grupos.length === 0 && (
+            <p className="rounded-lg border border-steel-600 bg-graphite-800 p-6 text-center text-steel-400">No hay repuestos registrados.</p>
+          )}
         </div>
       )}
 

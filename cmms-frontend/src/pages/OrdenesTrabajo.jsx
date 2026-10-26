@@ -9,6 +9,7 @@ import { getRepuestos } from "../services/repuestosService";
 import { getPlanes } from "../services/planesMantenimientoService";
 import { useLocation, useNavigate } from "react-router-dom";
 import { abreviar } from "../Utils/unidades";
+import { mensajeError } from "../Utils/errores";
 import {
   getOrdenes, crearOrden, actualizarOrden, iniciarOrden, completarOrden, cancelarOrden, eliminarOrden, registrarMantenimiento,
 } from "../services/ordenesTrabajoService";
@@ -220,9 +221,9 @@ export default function OrdenesTrabajo() {
     catch { alert("No se pudo cancelar la orden."); }
   }
   async function handleEliminar(id) {
-    if (!confirm("¿Eliminar esta orden? Esta acción no se puede deshacer.")) return;
+    if (!confirm("¿Eliminar esta orden? Los repuestos usados en ella volverán al inventario. Esta acción no se puede deshacer.")) return;
     try { await eliminarOrden(id); await cargarTodo(); }
-    catch { alert("No se pudo eliminar la orden."); }
+    catch (err) { alert(mensajeError(err, "No se pudo eliminar la orden.")); }
   }
 
   async function abrirInsumos(orden) {
@@ -486,12 +487,12 @@ export default function OrdenesTrabajo() {
 
             <div className="mb-3">
               <label className={labelClasses}>Descripción de lo realizado</label>
-              <textarea value={formRegistro.descripcion} onChange={(e) => setFormRegistro({ ...formRegistro, descripcion: e.target.value })} rows={3} required className={inputClasses} />
+              <textarea maxLength={300} value={formRegistro.descripcion} onChange={(e) => setFormRegistro({ ...formRegistro, descripcion: e.target.value })} rows={3} required className={inputClasses} />
             </div>
 
             <div className="mb-5">
               <label className={labelClasses}>Observaciones (opcional)</label>
-              <textarea value={formRegistro.observaciones} onChange={(e) => setFormRegistro({ ...formRegistro, observaciones: e.target.value })} rows={2} className={inputClasses} />
+              <textarea maxLength={500} value={formRegistro.observaciones} onChange={(e) => setFormRegistro({ ...formRegistro, observaciones: e.target.value })} rows={2} className={inputClasses} />
             </div>
 
             <div className="flex gap-2">
@@ -553,12 +554,12 @@ export default function OrdenesTrabajo() {
 
             <div className="mb-3">
               <label className={labelClasses}>Descripción</label>
-              <textarea value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} rows={2} className={inputClasses} />
+              <textarea maxLength={300} value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} rows={2} className={inputClasses} />
             </div>
 
             <div className="mb-5">
               <label className={labelClasses}>Observaciones</label>
-              <textarea value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} rows={2} className={inputClasses} />
+              <textarea maxLength={500} value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} rows={2} className={inputClasses} />
             </div>
 
             <div className="flex gap-2">

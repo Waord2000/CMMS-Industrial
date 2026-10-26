@@ -152,6 +152,10 @@ public class OrdenesTrabajoController : ControllerBase
             return BadRequest("El PlanId indicado no existe.");
         if (dto.HoraFin <= dto.HoraInicio)
             return BadRequest("La hora de finalización debe ser posterior a la hora de inicio.");
+        if (dto.Descripcion.Length > 300)
+            return BadRequest("La descripción no puede superar los 300 caracteres.");
+        if ((dto.Observaciones ?? string.Empty).Length > 500)
+            return BadRequest("Las observaciones no pueden superar los 500 caracteres.");
 
         var miId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var fechaProgramada = dto.FechaProgramada ?? DateOnly.FromDateTime(DateTime.Now);
@@ -207,7 +211,14 @@ public class OrdenesTrabajoController : ControllerBase
             }
         }
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return BadRequest("No se pudo guardar el mantenimiento. Revisa los datos e intenta de nuevo.");
+        }
 
         var creada = await QueryConIncludes().FirstAsync(o => o.OrdenId == orden.OrdenId);
         return CreatedAtAction(nameof(GetById), new { id = orden.OrdenId }, ToDto(creada));
@@ -311,8 +322,13 @@ public class OrdenesTrabajoController : ControllerBase
         return NoContent();
     }
 
-    // Al eliminar una orden se eliminan también los paros de máquina generados por ella.
-    // Si la orden tiene insumos o movimientos de inventario, no se puede eliminar.
+    // Al eliminar una orden:
+    //  - se eliminan los paros de máquina generados por ella,
+    //  - los repuestos consumidos (insumos) VUELVEN al stock, dejando una "Entrada" de reversión
+    //    en MovimientosInventario por cada insumo,
+    //  - el historial de movimientos se conserva, pero desvinculado de la orden eliminada
+    //    (el número de orden queda anotado en las observaciones).
+    // Todo ocurre en una sola transacción: si algo falla, no se cambia nada.
     [Authorize(Roles = "Administrador")]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
@@ -320,18 +336,50 @@ public class OrdenesTrabajoController : ControllerBase
         var orden = await _context.OrdenesTrabajos.FindAsync(id);
         if (orden is null) return NotFound();
 
+        using var transaccion = await _context.Database.BeginTransactionAsync();
+
         var paros = await _context.ParosMaquinas.Where(p => p.OrdenId == id).ToListAsync();
         _context.ParosMaquinas.RemoveRange(paros);
+
+        // 1) Devolver al stock lo consumido por la orden.
+        var consumos = await _context.ConsumoRepuestos.Where(c => c.OrdenId == id).ToListAsync();
+        foreach (var consumo in consumos)
+        {
+            var repuesto = await _context.Repuestos.FindAsync(consumo.RepuestoId);
+            if (repuesto is not null) repuesto.StockActual += consumo.Cantidad;
+
+            _context.MovimientosInventarios.Add(new MovimientosInventario
+            {
+                RepuestoId = consumo.RepuestoId,
+                TipoMovimiento = "Entrada",
+                Cantidad = consumo.Cantidad,
+                Fecha = DateTime.Now,
+                OrdenId = null,
+                Observaciones = $"Reversion por eliminacion de la orden #{id}"
+            });
+        }
+        _context.ConsumoRepuestos.RemoveRange(consumos);
+
+        // 2) Conservar el historial de movimientos, pero sin apuntar a una orden que ya no existe.
+        var movimientos = await _context.MovimientosInventarios.Where(m => m.OrdenId == id).ToListAsync();
+        foreach (var mov in movimientos)
+        {
+            var nota = $"(Orden #{id} eliminada) {mov.Observaciones}";
+            mov.Observaciones = nota.Length > 300 ? nota[..300] : nota;
+            mov.OrdenId = null;
+        }
+
         _context.OrdenesTrabajos.Remove(orden);
 
         try
         {
             await _context.SaveChangesAsync();
+            await transaccion.CommitAsync();
             return NoContent();
         }
         catch (DbUpdateException)
         {
-            return BadRequest("No se puede eliminar: la orden tiene insumos o movimientos de inventario registrados.");
+            return BadRequest("No se puede eliminar la orden porque tiene registros relacionados que la referencian.");
         }
     }
 
