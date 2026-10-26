@@ -5,6 +5,7 @@ import autoTable from "jspdf-autotable";
 import { getMtbfPeriodo, getMttrPeriodo, getConsumoDetalle } from "../services/indicadoresService";
 import { crearDocumento, agregarPiePagina } from "../Utils/pdf";
 import { abreviar } from "../Utils/unidades";
+import TendenciaIndicadores from "../components/TendenciaIndicadores";
 
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
@@ -334,6 +335,7 @@ export default function Indicadores() {
           </div>
         </>
       )}
+      <TendenciaIndicadores />
     </div>
   );
 }
