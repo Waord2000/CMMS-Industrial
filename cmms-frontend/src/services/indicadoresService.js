@@ -38,3 +38,8 @@ export async function getTendencia(desde, hasta) {
   const response = await api.get("/Indicadores/tendencia", { params: { desde, hasta } });
   return response.data;
 }
+
+export async function getMtbfPreventivo(periodo) {
+  const response = await api.get("/Indicadores/mtbf-preventivo", { params: parametros(periodo) });
+  return response.data;
+}

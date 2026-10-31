@@ -53,3 +53,18 @@ public class TendenciaMesDto
     public decimal InversionPreventivo { get; set; }
     public decimal ConsumoTotal { get; set; }
 }
+
+public class MtbfPreventivoDto
+{
+    public int PlanId { get; set; }
+    public int MaquinaId { get; set; }
+    public string Maquina { get; set; } = string.Empty;
+    public string Plan { get; set; } = string.Empty;
+    public int FrecuenciaMeses { get; set; }
+    public string Frecuencia { get; set; } = string.Empty;
+    public int ProgramadoHoras { get; set; }
+    public decimal? RealHoras { get; set; }
+    public int Intervalos { get; set; }
+    public DateOnly? UltimaEjecucion { get; set; }
+    public DateOnly? ProximaEjecucion { get; set; }
+}

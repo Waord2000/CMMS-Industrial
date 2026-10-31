@@ -132,7 +132,7 @@ export default function TendenciaIndicadores() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-lg border border-steel-600 bg-graphite-800 p-4 shadow-sm shadow-black/30">
               <h4 className="font-display text-lg font-semibold mb-1">MTBF por mes</h4>
-              <p className="mb-4 text-xs text-steel-400">Horas promedio entre paros — mientras más alto, mejor.</p>
+              <p className="mb-4 text-xs text-steel-400">Horas promedio entre intervenciones preventivas de un mismo plan. Lo ideal es que se acerque al intervalo programado.</p>
               {!hayMtbf ? (
                 <p className="py-10 text-center text-sm text-steel-400">Sin datos suficientes en este rango.</p>
               ) : (

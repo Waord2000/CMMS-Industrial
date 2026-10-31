@@ -50,8 +50,10 @@ public class OrdenesTrabajoController : ControllerBase
 
     // Evita duplicados de un mismo plan:
     // 1) un plan no puede tener dos órdenes abiertas (Pendiente / En Proceso) a la vez;
-    // 2) una vez realizado el mantenimiento, no se puede registrar otro hasta el primer día
-    //    del mes de su próxima ejecución (que se calcula con la frecuencia del plan).
+    // 2) entre dos mantenimientos realizados del mismo plan deben pasar al menos tantos meses
+    //    calendario como indica su frecuencia (mensual: no dos en el mismo mes; bimestral: uno
+    //    cada dos meses, etc.). La regla vale hacia adelante y hacia atrás, así se puede
+    //    cargar el historial de mantenimientos anteriores.
     // Devuelve el mensaje de error, o null si todo está bien.
     private async Task<string?> ValidarDuplicidadPlanAsync(int planId, DateOnly fecha, int ordenIgnorarId = 0)
     {
@@ -65,17 +67,22 @@ public class OrdenesTrabajoController : ControllerBase
         if (hayOrdenAbierta)
             return "Este plan ya tiene una orden pendiente o en proceso. Completa esa orden en lugar de crear otra.";
 
-        if (plan.ProximaEjecucion.HasValue)
+        var realizadas = await _context.OrdenesTrabajos
+            .Where(o => o.PlanId == planId && o.Estado == "Completada" && o.FechaProgramada != null && o.OrdenId != ordenIgnorarId)
+            .Select(o => o.FechaProgramada!.Value)
+            .ToListAsync();
+
+        var frecuencia = (int)plan.FrecuenciaMeses;
+        var textoMeses = frecuencia == 1 ? "1 mes" : $"{frecuencia} meses";
+
+        foreach (var existente in realizadas)
         {
-            var prox = plan.ProximaEjecucion.Value;
-            var inicioVentana = new DateOnly(prox.Year, prox.Month, 1);
-            if (fecha < inicioVentana)
-            {
-                var ultima = plan.UltimaEjecucion.HasValue
-                    ? $" El último se realizó el {plan.UltimaEjecucion.Value:dd/MM/yyyy}."
-                    : "";
-                return $"Este mantenimiento ya se realizó para el periodo actual.{ultima} La próxima ejecución corresponde a partir de {inicioVentana:MM/yyyy}.";
-            }
+            var meses = Math.Abs((fecha.Year - existente.Year) * 12 + fecha.Month - existente.Month);
+            if (meses >= frecuencia) continue;
+
+            return fecha >= existente
+                ? $"Este mantenimiento ya se realizó el {existente:dd/MM/yyyy}. Con frecuencia de {textoMeses}, el siguiente corresponde a partir de {existente.AddMonths(frecuencia):MM/yyyy}."
+                : $"Ya existe un mantenimiento de este plan el {existente:dd/MM/yyyy}. Con frecuencia de {textoMeses}, entre dos mantenimientos deben pasar al menos {textoMeses} calendario.";
         }
 
         return null;
@@ -204,7 +211,7 @@ public class OrdenesTrabajoController : ControllerBase
         if (dto.PlanId.HasValue)
         {
             var plan = await _context.PlanesMantenimientos.FindAsync(dto.PlanId.Value);
-            if (plan is not null)
+            if (plan is not null && (plan.UltimaEjecucion is null || fechaProgramada >= plan.UltimaEjecucion))
             {
                 plan.UltimaEjecucion = fechaProgramada;
                 plan.ProximaEjecucion = fechaProgramada.AddMonths(plan.FrecuenciaMeses);
